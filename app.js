@@ -422,90 +422,265 @@
   function escapeXls(v) { return String(v ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
   function escapeXml(v) { return String(v ?? '').replace(/[<>&\"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
   function downloadFile(name, content, type) { const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),500); }
-  function worksheetXml(name, columns, rows) {
-    const header = columns.map(c => `<Cell ss:StyleID="header"><Data ss:Type="String">${escapeXml(c.label)}</Data></Cell>`).join('');
+  function formatDateTimeLong(value) {
+    if (!value) return '';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleString('en-US', { month:'long', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+  }
+  function stockStatus(product) {
+    const stock = Number(product.stock || 0);
+    const low = Number(product.lowStock || 0);
+    if (stock <= 0) return 'Out of Stock';
+    if (low > 0 && stock <= low) return 'Low Stock';
+    return 'In Stock';
+  }
+  function xmlCell(value, style = 'text', type = 'String', mergeAcross = 0) {
+    const merge = mergeAcross ? ` ss:MergeAcross="${mergeAcross}"` : '';
+    return `<Cell ss:StyleID="${style}"${merge}><Data ss:Type="${type}">${escapeXml(value)}</Data></Cell>`;
+  }
+  function worksheetReport(name, title, subtitle, columns, rows, totalRow = null) {
+    const colCount = Math.max(columns.length, 1);
+    const widths = columns.map(c => `<Column ss:AutoFitWidth="0" ss:Width="${c.width || 120}"/>`).join('');
+    const header = columns.map(c => xmlCell(c.label, 'header')).join('');
     const body = rows.map(row => `<Row>${columns.map(c => {
       const value = typeof c.value === 'function' ? c.value(row) : row[c.key];
       const type = c.type || 'String';
-      const style = c.style || (type === 'Number' ? 'number' : 'text');
-      return `<Cell ss:StyleID="${style}"><Data ss:Type="${type}">${escapeXml(value)}</Data></Cell>`;
+      const defaultStyle = type === 'Number' ? 'number' : 'text';
+      const style = typeof c.style === 'function' ? c.style(row) : (c.style || defaultStyle);
+      return xmlCell(value ?? '', style, type);
     }).join('')}</Row>`).join('');
-    const widths = columns.map(c => `<Column ss:AutoFitWidth="0" ss:Width="${c.width || 120}"/>`).join('');
-    return `<Worksheet ss:Name="${escapeXml(name)}"><Table>${widths}<Row>${header}</Row>${body}</Table></Worksheet>`;
+    const totals = totalRow ? `<Row>${columns.map((c, i) => {
+      const value = typeof c.value === 'function' ? c.value(totalRow) : totalRow[c.key];
+      const type = c.type || 'String';
+      const style = i === 0 ? 'totalLabel' : (type === 'Number' ? 'totalCurrency' : 'totalLabel');
+      return xmlCell(value ?? '', style, type);
+    }).join('')}</Row>` : '';
+    return `<Worksheet ss:Name="${escapeXml(name)}"><Table>${widths}
+      <Row ss:Height="28">${xmlCell(title, 'sheetTitle', 'String', colCount - 1)}</Row>
+      <Row>${xmlCell(subtitle, 'sheetSubtitle', 'String', colCount - 1)}</Row>
+      <Row></Row>
+      <Row>${header}</Row>
+      ${body || `<Row>${xmlCell('No records available for the selected period.', 'muted', 'String', colCount - 1)}</Row>`}
+      ${totals}
+    </Table></Worksheet>`;
   }
+
+  function worksheetSummary(period, generatedAt, metrics) {
+    const netStyle = metrics.net < 0 ? 'danger' : 'currency';
+    return `<Worksheet ss:Name="Summary"><Table>
+      <Column ss:AutoFitWidth="0" ss:Width="170"/>
+      <Column ss:AutoFitWidth="0" ss:Width="140"/>
+      <Column ss:AutoFitWidth="0" ss:Width="150"/>
+      <Column ss:AutoFitWidth="0" ss:Width="125"/>
+      <Column ss:AutoFitWidth="0" ss:Width="115"/>
+      <Column ss:AutoFitWidth="0" ss:Width="105"/>
+      <Column ss:AutoFitWidth="0" ss:Width="125"/>
+      <Column ss:AutoFitWidth="0" ss:Width="105"/>
+      <Column ss:AutoFitWidth="0" ss:Width="115"/>
+      <Row ss:Height="44">${xmlCell('Report Summary', 'sheetTitle', 'String', 8)}</Row>
+      <Row ss:Height="26">${xmlCell(`${period} • Generated ${generatedAt}`, 'sheetSubtitle', 'String', 8)}</Row>
+      <Row></Row>
+      <Row>
+        ${xmlCell('Report Period', 'header')}
+        ${xmlCell('Total Sales', 'header')}
+        ${xmlCell('Total Expenses', 'header')}
+        ${xmlCell('Net', 'header')}
+        ${xmlCell('Transactions', 'header')}
+        ${xmlCell('Items Sold', 'header')}
+        ${xmlCell('Inventory Items', 'header')}
+        ${xmlCell('Low Stock', 'header')}
+        ${xmlCell('Out of Stock', 'header')}
+      </Row>
+      <Row>
+        ${xmlCell(period, 'text')}
+        ${xmlCell(metrics.totalSales, 'currency', 'Number')}
+        ${xmlCell(metrics.totalExpenses, 'currency', 'Number')}
+        ${xmlCell(metrics.net, netStyle, 'Number')}
+        ${xmlCell(metrics.totalOrders, 'integer', 'Number')}
+        ${xmlCell(metrics.totalQty, 'integer', 'Number')}
+        ${xmlCell(metrics.productCount, 'integer', 'Number')}
+        ${xmlCell(metrics.lowStock, metrics.lowStock > 0 ? 'warning' : 'good', 'Number')}
+        ${xmlCell(metrics.outStock, metrics.outStock > 0 ? 'danger' : 'good', 'Number')}
+      </Row>
+
+    </Table></Worksheet>`;
+  }
+
   function exportExcel() {
     const from=$('#reportFrom')?.value, to=$('#reportTo')?.value;
     const inRange=d=>(!from||d>=from)&&(!to||d<=to);
-    const sales=data.sales.filter(s=>inRange(s.date)).sort((a,b)=>String(a.date).localeCompare(String(b.date)) || String(a.item).localeCompare(String(b.item)));
+    const sales=data.sales.filter(s=>inRange(s.date)).sort((a,b)=>String(a.date).localeCompare(String(b.date)) || Number(a.createdAt||0)-Number(b.createdAt||0) || String(a.item).localeCompare(String(b.item)));
     const expenses=data.expenses.filter(e=>inRange(e.date)).sort((a,b)=>String(a.date).localeCompare(String(b.date)) || String(a.description).localeCompare(String(b.description)));
     const dates=[...new Set([...sales.map(s=>s.date),...expenses.map(e=>e.date)])].sort();
     let runningSales=0, runningExpenses=0;
     const dailyRows=dates.map(date=>{
-      const ds=sales.filter(s=>s.date===date).reduce((a,s)=>a+Number(s.total||0),0);
-      const de=expenses.filter(e=>e.date===date).reduce((a,e)=>a+Number(e.price||0),0);
+      const daySales=sales.filter(s=>s.date===date);
+      const dayExpenses=expenses.filter(e=>e.date===date);
+      const ds=daySales.reduce((a,s)=>a+Number(s.total||0),0);
+      const de=dayExpenses.reduce((a,e)=>a+Number(e.price||0),0);
       runningSales+=ds; runningExpenses+=de;
-      return {date:formatDateLong(date), sales:ds, expenses:de, net:ds-de, runningSales, runningExpenses};
+      return {
+        date:formatDateLong(date),
+        transactionCount:new Set(daySales.map(s=>s.orderId || s.id)).size,
+        itemsSold:daySales.reduce((a,s)=>a+Number(s.qty||0),0),
+        dailySales:ds,
+        dailyExpenses:de,
+        net:ds-de,
+        runningSales,
+        runningExpenses,
+        runningNet:runningSales-runningExpenses
+      };
     });
     const totalSales=sales.reduce((a,s)=>a+Number(s.total||0),0);
     const totalExpenses=expenses.reduce((a,e)=>a+Number(e.price||0),0);
-    const period = from || to ? `${from ? formatDateLong(from) : 'Start'} to ${to ? formatDateLong(to) : formatDateLong(todayISO())}` : 'All dates';
+    const totalQty=sales.reduce((a,s)=>a+Number(s.qty||0),0);
+    const totalOrders=new Set(sales.map(s=>s.orderId || s.id)).size;
+    const lowStock=data.products.filter(p=>Number(p.stock||0)>0 && Number(p.lowStock||0)>0 && Number(p.stock||0)<=Number(p.lowStock||0)).length;
+    const outStock=data.products.filter(p=>Number(p.stock||0)<=0).length;
+    const period = from && to && from === to ? formatDateLong(from) : (from || to ? `${from ? formatDateLong(from) : 'Start'} to ${to ? formatDateLong(to) : formatDateLong(todayISO())}` : 'All dates');
     const generatedAt = new Date().toLocaleString('en-US', { month:'long', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
 
-    const summaryRows = [
-      {label:'Business Name', value:data.settings.businessName || 'Point Of Sale'},
-      {label:'Report Period', value:period},
-      {label:'Generated', value:generatedAt},
-      {label:'Sales Total', value:peso(totalSales)},
-      {label:'Expenses Total', value:peso(totalExpenses)},
-      {label:'Net Total', value:peso(totalSales-totalExpenses)}
-    ];
+    const productMap = new Map();
+    data.products.forEach(p => productMap.set(p.id, { product:p.name || 'Product item', category:p.category || 'Uncategorized', qty:0, sales:0, price:Number(p.price||0), stock:Number(p.stock||0), lowStock:Number(p.lowStock||0) }));
+    sales.forEach(s => {
+      const key = s.productId || `sale-${s.item}`;
+      if (!productMap.has(key)) productMap.set(key, { product:s.item || 'Product item', category:s.category || 'Uncategorized', qty:0, sales:0, price:Number(s.price||0), stock:'', lowStock:'' });
+      const row = productMap.get(key);
+      row.qty += Number(s.qty||0);
+      row.sales += Number(s.total||0);
+    });
+    const productPerformance = [...productMap.values()].sort((a,b)=>Number(b.sales||0)-Number(a.sales||0) || String(a.product).localeCompare(String(b.product))).map(r => ({...r, averagePrice: r.qty ? r.sales / r.qty : r.price, status: r.stock === '' ? 'Not in current inventory' : stockStatus(r)}));
+    const bestProduct = productPerformance.find(r=>r.qty>0)?.product || 'No sales recorded';
+
+    const categoryMap = new Map();
+    sales.forEach(s => {
+      const key = s.category || 'Uncategorized';
+      if (!categoryMap.has(key)) categoryMap.set(key, {category:key, qty:0, sales:0});
+      const row=categoryMap.get(key); row.qty += Number(s.qty||0); row.sales += Number(s.total||0);
+    });
+    const categoryRows=[...categoryMap.values()].sort((a,b)=>b.sales-a.sales);
+    const topCategory = categoryRows[0]?.category || 'No sales recorded';
+
+    const expenseMap = new Map();
+    expenses.forEach(e => {
+      const key = e.description || 'Business expense';
+      if (!expenseMap.has(key)) expenseMap.set(key, {description:key, count:0, amount:0});
+      const row=expenseMap.get(key); row.count += 1; row.amount += Number(e.price||0);
+    });
+    const expenseBreakdown=[...expenseMap.values()].sort((a,b)=>b.amount-a.amount || String(a.description).localeCompare(String(b.description)));
+
+    const inventoryRows = data.products.map(p => ({
+      name:p.name || 'Product item',
+      category:p.category || 'Uncategorized',
+      price:Number(p.price||0),
+      stock:Number(p.stock||0),
+      lowStock:Number(p.lowStock||0),
+      status:stockStatus(p),
+      inventoryValue:Number(p.price||0)*Number(p.stock||0)
+    })).sort((a,b)=>String(a.status).localeCompare(String(b.status)) || String(a.name).localeCompare(String(b.name)));
+
+    const salesRows = sales.map(s => ({
+      date:formatDateLong(s.date),
+      time:formatDateTimeLong(s.createdAt),
+      orderId:s.orderId || s.id,
+      item:s.item || 'Product item',
+      category:s.category || 'Uncategorized',
+      price:Number(s.price||0),
+      qty:Number(s.qty||0),
+      total:Number(s.total||0)
+    }));
+    const expenseRows = expenses.map(e => ({date:formatDateLong(e.date), description:e.description || 'Business expense', amount:Number(e.price||0)}));
 
     const workbook = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-  <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office"><Author>Point Of Sale</Author><Title>${escapeXml(data.settings.businessName || 'Point Of Sale')} Report</Title></DocumentProperties>
+  <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office"><Author>Point Of Sale</Author><Title>${escapeXml(data.settings.businessName || 'Point Of Sale')} Detailed Report</Title></DocumentProperties>
+  <ExcelWorkbook xmlns="urn:schemas-microsoft-com:office:excel"><ProtectStructure>False</ProtectStructure><ProtectWindows>False</ProtectWindows></ExcelWorkbook>
   <Styles>
-    <Style ss:ID="title"><Font ss:Bold="1" ss:Size="16"/><Interior ss:Color="#EAF2FF" ss:Pattern="Solid"/></Style>
-    <Style ss:ID="header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1D4ED8" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
-    <Style ss:ID="text"><Alignment ss:Vertical="Center"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/></Borders></Style>
+    <Style ss:ID="sheetTitle"><Font ss:Bold="1" ss:Size="24" ss:Color="#111827"/><Interior ss:Color="#EAF2FF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style>
+    <Style ss:ID="sheetSubtitle"><Font ss:Bold="1" ss:Size="13" ss:Color="#475569"/><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style>
+    <Style ss:ID="header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1D4ED8" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#1E3A8A"/></Borders></Style>
+    <Style ss:ID="text"><Alignment ss:Vertical="Center" ss:WrapText="1"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/></Borders></Style>
+    <Style ss:ID="muted"><Font ss:Color="#64748B"/><Alignment ss:Vertical="Center"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/></Borders></Style>
     <Style ss:ID="number"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><NumberFormat ss:Format="#,##0.00"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/></Borders></Style>
     <Style ss:ID="integer"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><NumberFormat ss:Format="0"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/></Borders></Style>
-    <Style ss:ID="currency"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><NumberFormat ss:Format="₱#,##0.00"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/></Borders></Style>
+    <Style ss:ID="currency"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><NumberFormat ss:Format="&quot;₱&quot;#,##0.00"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/></Borders></Style>
+    <Style ss:ID="good"><Font ss:Bold="1" ss:Color="#166534"/><Interior ss:Color="#DCFCE7" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#BBF7D0"/></Borders></Style>
+    <Style ss:ID="warning"><Font ss:Bold="1" ss:Color="#854D0E"/><Interior ss:Color="#FEF3C7" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#FDE68A"/></Borders></Style>
+    <Style ss:ID="danger"><Font ss:Bold="1" ss:Color="#991B1B"/><Interior ss:Color="#FEE2E2" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#FECACA"/></Borders></Style>
+    <Style ss:ID="totalLabel"><Font ss:Bold="1"/><Interior ss:Color="#F1F5F9" ss:Pattern="Solid"/><Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/></Borders></Style>
+    <Style ss:ID="totalCurrency"><Font ss:Bold="1"/><Interior ss:Color="#F1F5F9" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/><NumberFormat ss:Format="&quot;₱&quot;#,##0.00"/><Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/></Borders></Style>
   </Styles>
-  ${worksheetXml('Summary', [
-    {label:'Description', key:'label', width:170},
-    {label:'Value', key:'value', width:210}
-  ], summaryRows)}
-  ${worksheetXml('Daily Report', [
-    {label:'Date', key:'date', width:145},
-    {label:'Daily Sales', key:'sales', type:'Number', style:'currency', width:120},
-    {label:'Daily Expenses', key:'expenses', type:'Number', style:'currency', width:130},
+  ${worksheetSummary(period, generatedAt, {
+    businessName: data.settings.businessName || 'Point Of Sale',
+    totalSales,
+    totalExpenses,
+    net: totalSales - totalExpenses,
+    totalOrders,
+    totalQty,
+    productCount: data.products.length,
+    lowStock,
+    outStock,
+    bestProduct,
+    topCategory
+  })}
+  ${worksheetReport('Daily Report', 'Daily Report', 'Sales, expenses, net, and running totals by date', [
+    {label:'Date', key:'date', width:155},
+    {label:'Transactions', key:'transactionCount', type:'Number', style:'integer', width:100},
+    {label:'Items Sold', key:'itemsSold', type:'Number', style:'integer', width:90},
+    {label:'Daily Sales', key:'dailySales', type:'Number', style:'currency', width:120},
+    {label:'Daily Expenses', key:'dailyExpenses', type:'Number', style:'currency', width:130},
     {label:'Net', key:'net', type:'Number', style:'currency', width:115},
     {label:'Running Sales', key:'runningSales', type:'Number', style:'currency', width:135},
-    {label:'Running Expenses', key:'runningExpenses', type:'Number', style:'currency', width:150}
-  ], dailyRows)}
-  ${worksheetXml('Sales Records', [
-    {label:'Date', value:r=>formatDateLong(r.date), width:145},
-    {label:'Item Description', key:'item', width:220},
+    {label:'Running Expenses', key:'runningExpenses', type:'Number', style:'currency', width:150},
+    {label:'Running Net', key:'runningNet', type:'Number', style:'currency', width:130}
+  ], dailyRows, {date:'TOTAL', transactionCount:totalOrders, itemsSold:totalQty, dailySales:totalSales, dailyExpenses:totalExpenses, net:totalSales-totalExpenses, runningSales:runningSales, runningExpenses:runningExpenses, runningNet:runningSales-runningExpenses})}
+  ${worksheetReport('Sales Details', 'Sales Details', 'Complete item-level sales records', [
+    {label:'Date', key:'date', width:155},
+    {label:'Recorded Time', key:'time', width:190},
+    {label:'Order ID', key:'orderId', width:190},
+    {label:'Item Description', key:'item', width:230},
     {label:'Category', key:'category', width:150},
     {label:'Price', key:'price', type:'Number', style:'currency', width:105},
     {label:'Qty', key:'qty', type:'Number', style:'integer', width:70},
     {label:'Total Amount', key:'total', type:'Number', style:'currency', width:130}
-  ], sales)}
-  ${worksheetXml('Expenses', [
-    {label:'Date', value:r=>formatDateLong(r.date), width:145},
-    {label:'Description', key:'description', width:260},
-    {label:'Amount', key:'price', type:'Number', style:'currency', width:120}
-  ], expenses)}
-  ${worksheetXml('Inventory', [
-    {label:'Item', key:'name', width:220},
+  ], salesRows, {date:'TOTAL', time:'', orderId:'', item:'', category:'', price:'', qty:totalQty, total:totalSales})}
+  ${worksheetReport('Expenses', 'Expense Details', 'Complete expense records for the selected period', [
+    {label:'Date', key:'date', width:155},
+    {label:'Description', key:'description', width:300},
+    {label:'Amount', key:'amount', type:'Number', style:'currency', width:125}
+  ], expenseRows, {date:'TOTAL', description:'', amount:totalExpenses})}
+  ${worksheetReport('Product Performance', 'Product Performance', 'Quantity sold, gross sales, and current stock by product', [
+    {label:'Product', key:'product', width:230},
+    {label:'Category', key:'category', width:150},
+    {label:'Qty Sold', key:'qty', type:'Number', style:'integer', width:90},
+    {label:'Gross Sales', key:'sales', type:'Number', style:'currency', width:125},
+    {label:'Average Price', key:'averagePrice', type:'Number', style:'currency', width:120},
+    {label:'Current Stock', key:'stock', type:'Number', style:'integer', width:105},
+    {label:'Status', key:'status', style:r => r.status === 'Out of Stock' ? 'danger' : (r.status === 'Low Stock' ? 'warning' : 'good'), width:125}
+  ], productPerformance)}
+  ${worksheetReport('Category Summary', 'Category Summary', 'Sales grouped by category', [
+    {label:'Category', key:'category', width:200},
+    {label:'Qty Sold', key:'qty', type:'Number', style:'integer', width:90},
+    {label:'Gross Sales', key:'sales', type:'Number', style:'currency', width:130}
+  ], categoryRows, {category:'TOTAL', qty:totalQty, sales:totalSales})}
+  ${worksheetReport('Expense Breakdown', 'Expense Breakdown', 'Expenses grouped by description', [
+    {label:'Description', key:'description', width:300},
+    {label:'Count', key:'count', type:'Number', style:'integer', width:80},
+    {label:'Total Amount', key:'amount', type:'Number', style:'currency', width:130}
+  ], expenseBreakdown, {description:'TOTAL', count:expenses.length, amount:totalExpenses})}
+  ${worksheetReport('Inventory', 'Inventory', 'Current product stock and inventory value', [
+    {label:'Item', key:'name', width:230},
     {label:'Category', key:'category', width:150},
     {label:'Price', key:'price', type:'Number', style:'currency', width:105},
     {label:'Stock', key:'stock', type:'Number', style:'integer', width:80},
-    {label:'Low Stock Level', key:'lowStock', type:'Number', style:'integer', width:130}
-  ], data.products)}
+    {label:'Low Stock Level', key:'lowStock', type:'Number', style:'integer', width:125},
+    {label:'Status', key:'status', style:r => r.status === 'Out of Stock' ? 'danger' : (r.status === 'Low Stock' ? 'warning' : 'good'), width:125},
+    {label:'Inventory Value', key:'inventoryValue', type:'Number', style:'currency', width:135}
+  ], inventoryRows, {name:'TOTAL', category:'', price:'', stock:data.products.reduce((a,p)=>a+Number(p.stock||0),0), lowStock:'', status:'', inventoryValue:inventoryRows.reduce((a,p)=>a+Number(p.inventoryValue||0),0)})}
 </Workbook>`;
-    downloadFile(`point-of-sale-report-${todayISO()}.xls`, workbook, 'application/vnd.ms-excel');
-    modal({title:'Excel report ready',message:'The report has been exported with clean sheets, readable dates, and formatted totals.'});
+    const filePeriod = from && to && from === to ? from : todayISO();
+    downloadFile(`point-of-sale-detailed-report-${filePeriod}.xls`, workbook, 'application/vnd.ms-excel');
+    modal({title:'Excel report exported',message:'Excel report exported with a clearer summary, daily report, sales details, expenses, product performance, category summary, expense breakdown, and inventory.'});
   }
 
   function bindEvents() {
