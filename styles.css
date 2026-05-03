@@ -350,3 +350,29 @@ html[data-theme="dark"] .password-shell.field-invalid{background:rgba(127,29,29,
   75%{transform:translateX(5px)}
 }
 .login-copy .eyebrow{letter-spacing:.1em}
+
+/* V16 professional responsive date handling, settings footer, and mobile image upload improvements */
+.table-wrap{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+table{width:100%}
+th:first-child,td:first-child{white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.35}
+#reportTable td:first-child,#reportTable th:first-child,#salesTable td:first-child,#salesTable th:first-child,#expensesTable td:first-child,#expensesTable th:first-child{min-width:108px;max-width:142px}
+#reports table{table-layout:auto}
+#reports th,#reports td{vertical-align:middle}
+@media(max-width:760px){
+  .table-wrap table{min-width:650px}
+  #reportTable td:first-child,#reportTable th:first-child,#salesTable td:first-child,#salesTable th:first-child,#expensesTable td:first-child,#expensesTable th:first-child{min-width:96px;max-width:118px;font-size:12px}
+  th,td{padding:10px 9px}
+}
+@media(max-width:430px){
+  .table-wrap{margin-inline:-2px;padding-bottom:4px}
+  .table-wrap table{min-width:610px}
+  #reportTable td:first-child,#reportTable th:first-child,#salesTable td:first-child,#salesTable th:first-child,#expensesTable td:first-child,#expensesTable th:first-child{min-width:86px;max-width:104px;font-size:11.5px}
+}
+.settings-footer{margin-top:18px;padding:16px 20px;display:flex;align-items:center;justify-content:center;gap:8px;border-style:dashed;color:var(--muted);background:linear-gradient(135deg,var(--surface),color-mix(in srgb,var(--accent) 5%,var(--surface)))}
+.settings-footer span{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.settings-footer strong{color:var(--text);font-size:14px;letter-spacing:-.01em}
+.image-drop{min-height:178px;border-radius:20px;border:1.5px dashed color-mix(in srgb,var(--accent) 34%,var(--line));background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 6%,var(--surface)),var(--surface-2));padding:14px;display:grid;gap:10px;place-items:center;text-align:center}
+.image-drop img{width:100%;max-width:220px;height:130px;object-fit:contain;border-radius:16px;background:var(--surface)}
+.image-drop input[type=file],.logo-control input[type=file]{min-height:48px;font-size:15px;cursor:pointer}
+.file-help:after{content:" Photo is optimized automatically for faster loading.";}
+.logo-preview-box{min-height:150px}.logo-preview-box img{height:170px}.logo-control input[type=file]{padding:14px}
+@media(max-width:720px){.image-drop{min-height:210px;padding:18px}.image-drop img{height:150px;max-width:260px}.logo-preview-box{min-height:180px}.logo-preview-box img{height:190px}.settings-footer{display:grid;text-align:center}}

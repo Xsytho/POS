@@ -66,7 +66,7 @@
     $('#confirmPasswordGroup').classList.toggle('hidden', !setup);
     $('#setupConfirmPassword').required = setup;
     $('#loginSubmitBtn').textContent = setup ? 'Create Password & Continue' : 'Unlock Workspace';
-    $('#loginHelp').textContent = setup ? 'No default password is included. The first password is created by the owner and saved only on this device.' : 'Use the password created for this device.';
+    $('#loginHelp').textContent = '';
     $('#loginBrandName').textContent = s.businessName || 'Point Of Sale';
   }
 
@@ -223,9 +223,9 @@
   function renderForms() {
     if (!$('#productForm').children.length) {
       $('#productForm').append(
-        field('Product image', el('div', { class:'image-drop' }, [el('img', { id:'productPreview', alt:'Product preview' }), input('productImage','file',{accept:'image/*'}), el('div',{class:'file-help', text:'Image is saved locally for offline use.'})])),
-        field('Item description', input('productName','text',{required:true,maxlength:80,placeholder:'Example: Iced Coffee'})),
-        field('Category', input('productCategory','text',{required:true,maxlength:50,placeholder:'Example: Drinks'})),
+        field('Product image', el('div', { class:'image-drop' }, [el('img', { id:'productPreview', alt:'Product preview' }), input('productImage','file',{accept:'image/*'}), el('div',{class:'file-help', text:''})])),
+        field('Item description', input('productName','text',{required:true,maxlength:80,placeholder:'Example: Product item'})),
+        field('Category', input('productCategory','text',{required:true,maxlength:50,placeholder:'Example: Product category'})),
         field('Price', input('productPrice','number',{required:true,min:'0',step:'0.01',placeholder:'0.00'})),
         field('Stock quantity', input('productStock','number',{required:true,min:'0',step:'1',placeholder:'0'})),
         field('Low stock alert', input('productLow','number',{min:'0',step:'1',value:'5'})),
@@ -235,7 +235,7 @@
     if (!$('#expenseForm').children.length) {
       $('#expenseForm').append(
         field('Date', input('expenseDate','date',{required:true,value:todayISO()})),
-        field('Description', input('expenseDescription','text',{required:true,maxlength:90,placeholder:'Example: Supplier payment'})),
+        field('Description', input('expenseDescription','text',{required:true,maxlength:90,placeholder:'Example: Business expense'})),
         field('Price', input('expensePrice','number',{required:true,min:'0',step:'0.01',placeholder:'0.00'})),
         el('button',{class:'btn primary full',type:'submit',text:'Add Expense'})
       );
@@ -270,7 +270,7 @@
 
   function renderProducts() { const q=($('#productsSearch')?.value||'').toLowerCase(); const wrap=$('#productCards'); wrap.replaceChildren(); data.products.filter(p=>`${p.name} ${p.category}`.toLowerCase().includes(q)).forEach(p=>wrap.append(productCard(p))); if(!wrap.children.length) wrap.append(empty('No products found. Add products to start selling.')); }
   function renderPOS() { const q=($('#posSearch')?.value||'').toLowerCase(); const wrap=$('#posProducts'); wrap.replaceChildren(); data.products.filter(p=>`${p.name} ${p.category}`.toLowerCase().includes(q)).forEach(p=>wrap.append(productCard(p,'pos'))); if(!wrap.children.length) wrap.append(empty('No products available. Add products first.')); renderCart(); }
-  function renderCart() { const wrap=$('#cartItems'); wrap.replaceChildren(); let qty=0,total=0; data.cart.forEach(line=>{ const p=data.products.find(x=>x.id===line.productId); if(!p) return; qty+=line.qty; total+=line.qty*p.price; const row=el('div',{class:'cart-line'}); row.append(p.image?el('img',{src:p.image,alt:p.name}):el('div',{class:'mini-placeholder',text:p.name.slice(0,2).toUpperCase()})); const info=el('div',{},[el('h4',{text:p.name}),el('small',{text:`${p.category} · ${peso(p.price)}`})]); const controls=el('div',{class:'qty-controls'},[el('button',{type:'button',text:'-'}),el('span',{text:line.qty}),el('button',{type:'button',text:'+'}),el('strong',{class:'line-total',text:peso(line.qty*p.price)})]); controls.children[0].addEventListener('click',()=>changeCart(p.id,-1)); controls.children[2].addEventListener('click',()=>changeCart(p.id,1)); info.append(controls); row.append(info); wrap.append(row); }); if(!wrap.children.length) wrap.append(el('div',{class:'cart-empty',text:'Select products from the left to build an order.'})); $('#cartQty').textContent=qty; $('#cartLines').textContent=data.cart.length; $('#cartTotal').textContent=peso(total); $('#cartCountText').textContent=data.cart.length?`${data.cart.length} product line(s) selected.`:'No items selected.'; $('#checkoutBtn').disabled=!data.cart.length; }
+  function renderCart() { const wrap=$('#cartItems'); wrap.replaceChildren(); let qty=0,total=0; data.cart.forEach(line=>{ const p=data.products.find(x=>x.id===line.productId); if(!p) return; qty+=line.qty; total+=line.qty*p.price; const row=el('div',{class:'cart-line'}); row.append(p.image?el('img',{src:p.image,alt:p.name}):el('div',{class:'mini-placeholder',text:p.name.slice(0,2).toUpperCase()})); const info=el('div',{},[el('h4',{text:p.name}),el('small',{text:`${p.category} · ${peso(p.price)}`})]); const controls=el('div',{class:'qty-controls'},[el('button',{type:'button',text:'-'}),el('span',{text:line.qty}),el('button',{type:'button',text:'+'}),el('strong',{class:'line-total',text:peso(line.qty*p.price)})]); controls.children[0].addEventListener('click',()=>changeCart(p.id,-1)); controls.children[2].addEventListener('click',()=>changeCart(p.id,1)); info.append(controls); row.append(info); wrap.append(row); }); if(!wrap.children.length) wrap.append(el('div',{class:'cart-empty',text:'Cart is empty.'})); $('#cartQty').textContent=qty; $('#cartLines').textContent=data.cart.length; $('#cartTotal').textContent=peso(total); $('#cartCountText').textContent=data.cart.length?`${data.cart.length} item group${data.cart.length>1?'s':''}`:'No items selected'; $('#checkoutBtn').disabled=!data.cart.length; }
   function renderSales() { const tbody=$('#salesTable'); tbody.replaceChildren(); filteredSales().slice().sort((a,b)=>b.createdAt-a.createdAt).forEach(s=>{ const tr=el('tr'); [formatDateLong(s.date),s.item,s.category,peso(s.price),s.qty,peso(s.total)].forEach(v=>tr.append(el('td',{text:v}))); const del=el('button',{class:'btn danger small',type:'button',text:'Delete'}); del.addEventListener('click',()=>deleteSale(s.id)); tr.append(el('td',{class:'row-actions'},del)); tbody.append(tr); }); if(!tbody.children.length) tbody.append(el('tr',{},el('td',{colspan:'7',text:'No sales found.'}))); }
   function renderExpenses() { const tbody=$('#expensesTable'); tbody.replaceChildren(); filteredExpenses().slice().sort((a,b)=>b.createdAt-a.createdAt).forEach(e=>{ const tr=el('tr'); [formatDateLong(e.date),e.description,peso(e.price)].forEach(v=>tr.append(el('td',{text:v}))); const del=el('button',{class:'btn danger small',type:'button',text:'Delete'}); del.addEventListener('click',()=>deleteExpense(e.id)); tr.append(el('td',{class:'row-actions'},del)); tbody.append(tr); }); if(!tbody.children.length) tbody.append(el('tr',{},el('td',{colspan:'4',text:'No expenses found.'}))); }
 
@@ -387,21 +387,125 @@
   async function deleteExpense(id) { const ok=await modal({title:'Delete expense',message:'Remove this expense record?',confirm:true,okText:'Delete',danger:true}); if(!ok) return; data.expenses=data.expenses.filter(x=>x.id!==id); renderAll(); }
   async function deleteProduct(id) { const p=data.products.find(x=>x.id===id); const hasSales=data.sales.some(s=>s.productId===id); if(hasSales) return modal({title:'Product has sales history',message:'This product cannot be deleted because it has sales records. Keep it for accurate reports.'}); const ok=await modal({title:'Delete product',message:`Delete ${p.name}?`,confirm:true,okText:'Delete',danger:true}); if(!ok) return; data.products=data.products.filter(x=>x.id!==id); data.cart=data.cart.filter(x=>x.productId!==id); renderAll(); }
 
-  function imageToDataUrl(file) { return new Promise((resolve,reject)=>{ if(!file) return resolve(''); if(file.size > 1024*1024*2) return reject(new Error('Image must be under 2MB.')); const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=reject; reader.readAsDataURL(file); }); }
+  function imageToDataUrl(file, options = {}) {
+    return new Promise((resolve, reject) => {
+      if (!file) return resolve('');
+      const maxInputMb = options.maxInputMb || 12;
+      const maxSize = options.maxSize || 1200;
+      const quality = options.quality || 0.82;
+      if (!file.type || !file.type.startsWith('image/')) return reject(new Error('Please upload a valid image file.'));
+      if (file.size > 1024 * 1024 * maxInputMb) return reject(new Error(`Image is too large. Please use an image under ${maxInputMb}MB.`));
+
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Image could not be read. Please try another photo.'));
+      reader.onload = () => {
+        const source = String(reader.result || '');
+        const img = new Image();
+        img.onerror = () => reject(new Error('Image format is not supported by this browser. Please use JPG, PNG, or WebP.'));
+        img.onload = () => {
+          const ratio = Math.min(1, maxSize / Math.max(img.width, img.height));
+          const width = Math.max(1, Math.round(img.width * ratio));
+          const height = Math.max(1, Math.round(img.height * ratio));
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d', { alpha: true });
+          ctx.drawImage(img, 0, 0, width, height);
+          const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+          resolve(canvas.toDataURL(outputType, outputType === 'image/png' ? undefined : quality));
+        };
+        img.src = source;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
   function escapeXls(v) { return String(v ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
+  function escapeXml(v) { return String(v ?? '').replace(/[<>&\"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
   function downloadFile(name, content, type) { const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),500); }
+  function worksheetXml(name, columns, rows) {
+    const header = columns.map(c => `<Cell ss:StyleID="header"><Data ss:Type="String">${escapeXml(c.label)}</Data></Cell>`).join('');
+    const body = rows.map(row => `<Row>${columns.map(c => {
+      const value = typeof c.value === 'function' ? c.value(row) : row[c.key];
+      const type = c.type || 'String';
+      const style = c.style || (type === 'Number' ? 'number' : 'text');
+      return `<Cell ss:StyleID="${style}"><Data ss:Type="${type}">${escapeXml(value)}</Data></Cell>`;
+    }).join('')}</Row>`).join('');
+    const widths = columns.map(c => `<Column ss:AutoFitWidth="0" ss:Width="${c.width || 120}"/>`).join('');
+    return `<Worksheet ss:Name="${escapeXml(name)}"><Table>${widths}<Row>${header}</Row>${body}</Table></Worksheet>`;
+  }
   function exportExcel() {
     const from=$('#reportFrom')?.value, to=$('#reportTo')?.value;
     const inRange=d=>(!from||d>=from)&&(!to||d<=to);
-    const sales=data.sales.filter(s=>inRange(s.date));
-    const expenses=data.expenses.filter(e=>inRange(e.date));
+    const sales=data.sales.filter(s=>inRange(s.date)).sort((a,b)=>String(a.date).localeCompare(String(b.date)) || String(a.item).localeCompare(String(b.item)));
+    const expenses=data.expenses.filter(e=>inRange(e.date)).sort((a,b)=>String(a.date).localeCompare(String(b.date)) || String(a.description).localeCompare(String(b.description)));
     const dates=[...new Set([...sales.map(s=>s.date),...expenses.map(e=>e.date)])].sort();
     let runningSales=0, runningExpenses=0;
-    const rows=dates.map(date=>{ const ds=sales.filter(s=>s.date===date).reduce((a,s)=>a+s.total,0); const de=expenses.filter(e=>e.date===date).reduce((a,e)=>a+e.price,0); runningSales+=ds; runningExpenses+=de; return {date,sales:ds,expenses:de,net:ds-de,runningSales,runningExpenses}; });
-    const period = from || to ? `${from ? formatDateLong(from) : 'Start'} to ${to ? formatDateLong(to) : 'Today'}` : 'All dates';
-    const html=`<html><head><meta charset="utf-8"></head><body><h2>${escapeXls(data.settings.businessName)} Report</h2><p>Period: ${escapeXls(period)}</p><h3>Daily Report</h3><table border="1"><tr><th>Date</th><th>Daily Sales</th><th>Daily Expenses</th><th>Net</th><th>Running Sales</th><th>Running Expenses</th></tr>${rows.map(r=>`<tr><td>${formatDateLong(r.date)}</td><td>${r.sales}</td><td>${r.expenses}</td><td>${r.sales-r.expenses}</td><td>${r.runningSales}</td><td>${r.runningExpenses}</td></tr>`).join('')}</table><h3>Sales Records</h3><table border="1"><tr><th>Date</th><th>Item Description</th><th>Category</th><th>Price</th><th>Qty</th><th>Total Amount</th></tr>${sales.map(s=>`<tr><td>${formatDateLong(s.date)}</td><td>${escapeXls(s.item)}</td><td>${escapeXls(s.category)}</td><td>${s.price}</td><td>${s.qty}</td><td>${s.total}</td></tr>`).join('')}</table><h3>Expenses</h3><table border="1"><tr><th>Date</th><th>Description</th><th>Price</th></tr>${expenses.map(e=>`<tr><td>${formatDateLong(e.date)}</td><td>${escapeXls(e.description)}</td><td>${e.price}</td></tr>`).join('')}</table><h3>Inventory</h3><table border="1"><tr><th>Item</th><th>Category</th><th>Price</th><th>Stock</th><th>Low Stock Alert</th></tr>${data.products.map(p=>`<tr><td>${escapeXls(p.name)}</td><td>${escapeXls(p.category)}</td><td>${p.price}</td><td>${p.stock}</td><td>${p.lowStock}</td></tr>`).join('')}</table></body></html>`;
-    downloadFile(`pos-report-${todayISO()}.xls`, html, 'application/vnd.ms-excel');
-    modal({title:'Excel exported',message:'The filtered report has been downloaded from the Reports module.'});
+    const dailyRows=dates.map(date=>{
+      const ds=sales.filter(s=>s.date===date).reduce((a,s)=>a+Number(s.total||0),0);
+      const de=expenses.filter(e=>e.date===date).reduce((a,e)=>a+Number(e.price||0),0);
+      runningSales+=ds; runningExpenses+=de;
+      return {date:formatDateLong(date), sales:ds, expenses:de, net:ds-de, runningSales, runningExpenses};
+    });
+    const totalSales=sales.reduce((a,s)=>a+Number(s.total||0),0);
+    const totalExpenses=expenses.reduce((a,e)=>a+Number(e.price||0),0);
+    const period = from || to ? `${from ? formatDateLong(from) : 'Start'} to ${to ? formatDateLong(to) : formatDateLong(todayISO())}` : 'All dates';
+    const generatedAt = new Date().toLocaleString('en-US', { month:'long', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+
+    const summaryRows = [
+      {label:'Business Name', value:data.settings.businessName || 'Point Of Sale'},
+      {label:'Report Period', value:period},
+      {label:'Generated', value:generatedAt},
+      {label:'Sales Total', value:peso(totalSales)},
+      {label:'Expenses Total', value:peso(totalExpenses)},
+      {label:'Net Total', value:peso(totalSales-totalExpenses)}
+    ];
+
+    const workbook = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office"><Author>Point Of Sale</Author><Title>${escapeXml(data.settings.businessName || 'Point Of Sale')} Report</Title></DocumentProperties>
+  <Styles>
+    <Style ss:ID="title"><Font ss:Bold="1" ss:Size="16"/><Interior ss:Color="#EAF2FF" ss:Pattern="Solid"/></Style>
+    <Style ss:ID="header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1D4ED8" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
+    <Style ss:ID="text"><Alignment ss:Vertical="Center"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/></Borders></Style>
+    <Style ss:ID="number"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><NumberFormat ss:Format="#,##0.00"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/></Borders></Style>
+    <Style ss:ID="integer"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><NumberFormat ss:Format="0"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/></Borders></Style>
+    <Style ss:ID="currency"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><NumberFormat ss:Format="₱#,##0.00"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E5E7EB"/></Borders></Style>
+  </Styles>
+  ${worksheetXml('Summary', [
+    {label:'Description', key:'label', width:170},
+    {label:'Value', key:'value', width:210}
+  ], summaryRows)}
+  ${worksheetXml('Daily Report', [
+    {label:'Date', key:'date', width:145},
+    {label:'Daily Sales', key:'sales', type:'Number', style:'currency', width:120},
+    {label:'Daily Expenses', key:'expenses', type:'Number', style:'currency', width:130},
+    {label:'Net', key:'net', type:'Number', style:'currency', width:115},
+    {label:'Running Sales', key:'runningSales', type:'Number', style:'currency', width:135},
+    {label:'Running Expenses', key:'runningExpenses', type:'Number', style:'currency', width:150}
+  ], dailyRows)}
+  ${worksheetXml('Sales Records', [
+    {label:'Date', value:r=>formatDateLong(r.date), width:145},
+    {label:'Item Description', key:'item', width:220},
+    {label:'Category', key:'category', width:150},
+    {label:'Price', key:'price', type:'Number', style:'currency', width:105},
+    {label:'Qty', key:'qty', type:'Number', style:'integer', width:70},
+    {label:'Total Amount', key:'total', type:'Number', style:'currency', width:130}
+  ], sales)}
+  ${worksheetXml('Expenses', [
+    {label:'Date', value:r=>formatDateLong(r.date), width:145},
+    {label:'Description', key:'description', width:260},
+    {label:'Amount', key:'price', type:'Number', style:'currency', width:120}
+  ], expenses)}
+  ${worksheetXml('Inventory', [
+    {label:'Item', key:'name', width:220},
+    {label:'Category', key:'category', width:150},
+    {label:'Price', key:'price', type:'Number', style:'currency', width:105},
+    {label:'Stock', key:'stock', type:'Number', style:'integer', width:80},
+    {label:'Low Stock Level', key:'lowStock', type:'Number', style:'integer', width:130}
+  ], data.products)}
+</Workbook>`;
+    downloadFile(`point-of-sale-report-${todayISO()}.xls`, workbook, 'application/vnd.ms-excel');
+    modal({title:'Excel report ready',message:'The report has been exported with clean sheets, readable dates, and formatted totals.'});
   }
 
   function bindEvents() {
@@ -429,8 +533,8 @@
     document.addEventListener('click', e => { const dd=$('#inventoryDropdown'); if(dd && !dd.classList.contains('hidden') && !e.target.closest('#stockNotifyBtn') && !e.target.closest('#inventoryDropdown')) closeInventoryDropdown(); });
     document.addEventListener('keydown', e => { if(e.key === 'Escape') closeInventoryDropdown(); });
     $('#themeToggle').addEventListener('click',()=>{ data.settings.theme = data.settings.theme === 'dark' ? 'light' : 'dark'; renderAll(); }); $('#modalOk').addEventListener('click',()=>closeModal(true)); $('#modalCancel').addEventListener('click',()=>closeModal(false)); $('#modalOverlay').addEventListener('click',e=>{ if(e.target.id==='modalOverlay') closeModal(false); });
-    $('#productImage').addEventListener('change', async e => { try { const src=await imageToDataUrl(e.target.files[0]); $('#productPreview').src=src; } catch(err) { e.target.value=''; modal({title:'Image not accepted',message:err.message}); } });
-    $('#productForm').addEventListener('submit', async e => { e.preventDefault(); try { const img=await imageToDataUrl($('#productImage').files[0]); data.products.unshift({ id:uid(), name:$('#productName').value.trim(), category:$('#productCategory').value.trim(), price:Number($('#productPrice').value), stock:Math.floor(Number($('#productStock').value)), lowStock:Math.floor(Number($('#productLow').value || 5)), image:img, createdAt:Date.now() }); e.target.reset(); $('#productPreview').removeAttribute('src'); $('#productLow').value='5'; renderAll(); modal({title:'Product added',message:'The product is now available in Point of Sale.'}); } catch(err){ modal({title:'Product not saved',message:err.message}); } });
+    $('#productImage').addEventListener('change', async e => { try { const src=await imageToDataUrl(e.target.files[0], { maxInputMb: 12, maxSize: 1280, quality: 0.8 }); $('#productPreview').src=src; } catch(err) { e.target.value=''; modal({title:'Image not accepted',message:err.message}); } });
+    $('#productForm').addEventListener('submit', async e => { e.preventDefault(); try { const img=await imageToDataUrl($('#productImage').files[0], { maxInputMb: 12, maxSize: 1280, quality: 0.8 }); data.products.unshift({ id:uid(), name:$('#productName').value.trim(), category:$('#productCategory').value.trim(), price:Number($('#productPrice').value), stock:Math.floor(Number($('#productStock').value)), lowStock:Math.floor(Number($('#productLow').value || 5)), image:img, createdAt:Date.now() }); e.target.reset(); $('#productPreview').removeAttribute('src'); $('#productLow').value='5'; renderAll(); modal({title:'Product added',message:'The product is now available in Point of Sale.'}); } catch(err){ modal({title:'Product not saved',message:err.message}); } });
     $('#expenseForm').addEventListener('submit', e => { e.preventDefault(); data.expenses.unshift({id:uid(),date:$('#expenseDate').value,description:$('#expenseDescription').value.trim(),price:Number($('#expensePrice').value),createdAt:Date.now()}); e.target.reset(); $('#expenseDate').value=todayISO(); renderAll(); modal({title:'Expense added',message:'Expense record saved successfully.'}); });
     $('#checkoutBtn').addEventListener('click',checkout); $('#clearCartBtn').addEventListener('click',async()=>{ if(!data.cart.length) return; if(await modal({title:'Clear cart',message:'Remove all items from the current order?',confirm:true,okText:'Clear'})){ data.cart=[]; renderCart(); saveData(); }});
     ['productsSearch','posSearch','salesSearch','expensesSearch','reportFrom','reportTo'].forEach(id=>{ const n=$(`#${id}`); if(n) n.addEventListener('input',renderAll); }); $('#resetReportFilter').addEventListener('click',()=>{ $('#reportFrom').value=''; $('#reportTo').value=''; renderAll(); });
@@ -438,7 +542,7 @@
     $('#passwordForm').addEventListener('submit', async e => { e.preventDefault(); const newPassword=$('#newPassword').value; const confirmPassword=$('#confirmPassword').value; if(newPassword !== confirmPassword) return modal({title:'Password not updated',message:'New password and confirm password must match.'}); localStorage.setItem(AUTH_KEY, await hashText(newPassword)); e.target.reset(); modal({title:'Password updated',message:'The POS password has been changed successfully.'}); });
     $('#logoInput').addEventListener('change', async e => {
       try {
-        const src = await imageToDataUrl(e.target.files[0]);
+        const src = await imageToDataUrl(e.target.files[0], { maxInputMb: 12, maxSize: 1000, quality: 0.85 });
         if (src) { data.settings.logo = src; renderAll(); }
       } catch(err) { e.target.value=''; modal({title:'Logo not accepted',message:err.message}); }
     });
