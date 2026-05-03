@@ -1,6 +1,12 @@
 (() => {
   'use strict';
 
+  const SUPABASE_CONFIG = {
+    url: 'https://jqvyzdsaheeekoxxbleb.supabase.co',
+    anonKey: 'sb_publishable_siBhY5bDq-3i4agHiCOpIA_9O5uzC1C',
+    recordKey: 'point-of-sale-main-data'
+  };
+
   const DB_KEY = 'pos_pro_v4_data';
   const AUTH_KEY = 'pos_pro_v4_auth';
   const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -37,14 +43,19 @@
     'x-circle':'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M15 9l-6 6"></path><path d="M9 9l6 6"></path></svg>',
     info:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>',
     'chevron-left':'<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"></path></svg>',
-    'chevron-right':'<svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"></path></svg>'
+    'chevron-right':'<svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"></path></svg>',
+    cloud:'<svg viewBox="0 0 24 24"><path d="M17.5 19H7a5 5 0 0 1-.7-10A6 6 0 0 1 18 7.5 4.5 4.5 0 0 1 17.5 19z"></path><path d="M8 15h8"></path><path d="M12 11v8"></path></svg>',
+    reset:'<svg viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 15H6L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>'
   };
 
   const defaultData = () => ({
     products: [], sales: [], expenses: [], cart: [],
-    settings: { businessName:'Point Of Sale', accent:'#1d4ed8', theme:'light', logo:'', headerStyle:'soft', surfaceStyle:'elevated', cardSize:'comfortable', productImageSize:'standard', navStyle:'full', buttonStyle:'rounded', fontStyle:'system', dashboardStyle:'executive', productCardStyle:'standard', tableStyle:'standard', loginStyle:'split', backgroundStyle:'plain', sidebarCollapsed:false }
+    settings: { businessName:'Point Of Sale', accent:'#1d4ed8', theme:'light', logo:'', headerStyle:'soft', surfaceStyle:'elevated', cardSize:'comfortable', productImageSize:'standard', navStyle:'full', buttonStyle:'rounded', fontStyle:'system', dashboardStyle:'executive', productCardStyle:'standard', tableStyle:'standard', loginStyle:'split', backgroundStyle:'plain', sidebarCollapsed:false, sync:{enabled:true,url:SUPABASE_CONFIG.url,anonKey:SUPABASE_CONFIG.anonKey,recordKey:SUPABASE_CONFIG.recordKey,auto:true,lastSyncAt:'',lastPushAt:'',lastPullAt:''} }
   });
   let data = loadData();
+  let cloudSyncTimer = null;
+  let cloudSyncBusy = false;
+  let suppressCloudSync = false;
 
   function loadData() {
     try {
@@ -55,19 +66,171 @@
       return merged;
     } catch { return defaultData(); }
   }
-  function saveData() { localStorage.setItem(DB_KEY, JSON.stringify(data)); }
+  function saveData() { localStorage.setItem(DB_KEY, JSON.stringify(data)); scheduleCloudSync(); }
+
+
+  function getSyncSettings() {
+    const sync = { ...(defaultData().settings.sync || {}), ...((data.settings || {}).sync || {}) };
+    sync.url = String(SUPABASE_CONFIG.url).trim().replace(/\/+$/, '');
+    sync.anonKey = String(SUPABASE_CONFIG.anonKey).trim();
+    sync.recordKey = SUPABASE_CONFIG.recordKey;
+    sync.auto = true;
+    sync.enabled = Boolean(sync.url && sync.anonKey && sync.recordKey);
+    return sync;
+  }
+  function setSyncSettings(next) {
+    data.settings.sync = { ...getSyncSettings(), ...next };
+  }
+  function cloudPayload() {
+    return {
+      version: 32,
+      products: data.products || [],
+      sales: data.sales || [],
+      expenses: data.expenses || [],
+      settings: { ...(data.settings || {}), sync: undefined },
+      authHash: localStorage.getItem(AUTH_KEY) || '',
+      savedAt: new Date().toISOString()
+    };
+  }
+  function applyCloudPayload(payload) {
+    if (!payload || typeof payload !== 'object') throw new Error('Online database data is empty or invalid.');
+    const currentSync = getSyncSettings();
+    data.products = Array.isArray(payload.products) ? payload.products : [];
+    data.sales = Array.isArray(payload.sales) ? payload.sales : [];
+    data.expenses = Array.isArray(payload.expenses) ? payload.expenses : [];
+    data.cart = [];
+    data.settings = { ...defaultData().settings, ...(payload.settings || {}), sync: currentSync };
+    if (payload.authHash) localStorage.setItem(AUTH_KEY, payload.authHash);
+    saveData();
+  }
+  function syncHeaders(sync) {
+    return {
+      apikey: sync.anonKey,
+      Authorization: `Bearer ${sync.anonKey}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=representation'
+    };
+  }
+  async function fetchCloudRecord() {
+    const sync = getSyncSettings();
+    if (!sync.enabled) throw new Error('Online database is not available yet. Please check the Supabase setup.');
+    const url = `${sync.url}/rest/v1/pos_database?record_key=eq.${encodeURIComponent(sync.recordKey)}&select=*`;
+    const res = await fetch(url, { headers: syncHeaders(sync) });
+    if (!res.ok) throw new Error(`Database read failed. Check the Supabase setup and table policy. (${res.status})`);
+    const rows = await res.json();
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+  async function pushCloudData(showNotice = true) {
+    const sync = getSyncSettings();
+    if (!sync.enabled) throw new Error('Online database is not available yet. Please check the Supabase setup.');
+    cloudSyncBusy = true;
+    try {
+      const now = new Date().toISOString();
+      const body = [{ record_key: sync.recordKey, payload: cloudPayload(), updated_at: now }];
+      const res = await fetch(`${sync.url}/rest/v1/pos_database`, { method:'POST', headers: syncHeaders(sync), body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(`Database save failed. Make sure the Supabase table and policies are installed. (${res.status})`);
+      setSyncSettings({ enabled:true, lastSyncAt: now, lastPushAt: now });
+      localStorage.setItem(DB_KEY, JSON.stringify(data));
+      renderSyncSettings();
+      if (showNotice) modal({ title:'Database updated', message:'Latest POS data has been saved to the online database.' });
+    } finally { cloudSyncBusy = false; }
+  }
+  async function pullCloudData(showNotice = true) {
+    const record = await fetchCloudRecord();
+    if (!record) {
+      await pushCloudData(false);
+      if (showNotice) modal({ title:'Database initialized', message:'The online database is ready and now contains this POS data.' });
+      return;
+    }
+    suppressCloudSync = true;
+    try {
+      applyCloudPayload(record.payload);
+      setSyncSettings({ lastSyncAt: record.updated_at || new Date().toISOString(), lastPullAt: new Date().toISOString() });
+      localStorage.setItem(DB_KEY, JSON.stringify(data));
+      renderAll();
+      if (showNotice) modal({ title:'Database data loaded', message:'Products, sales, expenses, reports, and settings were loaded from the online database.' });
+    } finally {
+      suppressCloudSync = false;
+    }
+  }
+  async function syncNow(showNotice = true) {
+    const sync = getSyncSettings();
+    if (!sync.enabled) throw new Error('Online database is not available yet. Please check the Supabase setup.');
+    const record = await fetchCloudRecord();
+    if (!record) return pushCloudData(showNotice);
+    const cloudTime = new Date(record.updated_at || 0).getTime();
+    const lastSync = new Date(sync.lastSyncAt || 0).getTime();
+    if (cloudTime > lastSync) return pullCloudData(showNotice);
+    return pushCloudData(showNotice);
+  }
+  function scheduleCloudSync() {
+    if (suppressCloudSync || cloudSyncBusy) return;
+    const sync = getSyncSettings();
+    if (!sync.enabled || !sync.auto || !navigator.onLine) return;
+    clearTimeout(cloudSyncTimer);
+    cloudSyncTimer = setTimeout(() => pushCloudData(false).catch(() => renderSyncSettings('Database paused')), 1400);
+  }
+  function renderSyncSettings(statusOverride = '') {
+    // Online database runs automatically in the background.
+    // This function stays lightweight so older UI hooks remain safe.
+    const status = $('#syncStatusText');
+    const last = $('#syncLastText');
+    if (status) status.textContent = statusOverride || 'Database connected';
+    if (last) {
+      const sync = getSyncSettings();
+      const stamp = sync.lastSyncAt ? formatDateTimeLong(sync.lastSyncAt) : 'Preparing database';
+      last.textContent = stamp;
+    }
+  }
+
+  async function initialCloudPull() {
+    if (!navigator.onLine) return;
+    try {
+      const sync = getSyncSettings();
+      if (!sync.enabled) return;
+      const record = await fetchCloudRecord();
+      if (!record || !record.payload) return;
+      const cloudTime = new Date(record.updated_at || 0).getTime();
+      const localTime = new Date(sync.lastSyncAt || 0).getTime();
+      if (!sync.lastSyncAt || cloudTime > localTime) {
+        suppressCloudSync = true;
+        applyCloudPayload(record.payload);
+        setSyncSettings({ lastSyncAt: record.updated_at || new Date().toISOString(), lastPullAt: new Date().toISOString(), auto: true, enabled: true });
+        localStorage.setItem(DB_KEY, JSON.stringify(data));
+        suppressCloudSync = false;
+      }
+    } catch (err) {
+      suppressCloudSync = false;
+      console.warn('Initial database pull skipped:', err.message);
+    }
+  }
+
+  function startAutoDatabaseSync() {
+    if (window.__posAutoDatabaseSyncStarted) return;
+    window.__posAutoDatabaseSyncStarted = true;
+    window.setInterval(() => {
+      if (navigator.onLine) syncNow(false).catch(() => {});
+    }, 20000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && navigator.onLine) syncNow(false).catch(() => {});
+    });
+    window.addEventListener('focus', () => {
+      if (navigator.onLine) syncNow(false).catch(() => {});
+    });
+  }
+
   async function hashText(text) { const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)); return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''); }
   function hasPassword() { return Boolean(localStorage.getItem(AUTH_KEY)); }
   function configureLockScreen() {
     const setup = !hasPassword();
     const s = data.settings || defaultData().settings;
     $('#loginModeLabel').textContent = setup ? 'Initial Setup' : 'Account Access';
-    $('#loginSubtitle').textContent = setup ? 'Create a secure password before opening the workspace.' : 'Enter your password to continue.';
+    $('#loginSubtitle').textContent = setup ? 'Create a secure password before opening the POS.' : 'Enter your password to continue.';
     $('#passwordLabel').textContent = setup ? 'Create password' : 'Password';
     $('#passwordInput').placeholder = setup ? 'Minimum 8 characters' : 'Enter password';
     $('#confirmPasswordGroup').classList.toggle('hidden', !setup);
     $('#setupConfirmPassword').required = setup;
-    $('#loginSubmitBtn').textContent = setup ? 'Create Password & Continue' : 'Unlock Workspace';
+    $('#loginSubmitBtn').textContent = setup ? 'Create Password & Continue' : 'Unlock POS';
     $('#loginHelp').textContent = '';
     $('#loginBrandName').textContent = s.businessName || 'Point Of Sale';
   }
@@ -127,6 +290,76 @@
   }
   function closeModal(result) { $('#modalOverlay').classList.add('hidden'); if (modalResolver) modalResolver(result); modalResolver = null; }
 
+  function passwordModal({ title='Confirm password', message='Enter your current password to continue.', okText='Continue', danger=false } = {}) {
+    $('#modalTitle').textContent = title;
+    $('#modalMessage').textContent = message;
+    const detailsEl = $('#modalDetails');
+    detailsEl.classList.remove('hidden');
+    detailsEl.innerHTML = '<div class="modal-input-wrap"><label for="modalPasswordInput">Current password</label><input id="modalPasswordInput" type="password" autocomplete="current-password" placeholder="Enter current password"></div><div class="modal-warning-note">This action clears POS records from this device and the online database.</div>';
+    $('#modalCancel').classList.remove('hidden');
+    $('#modalCancel').textContent = 'Cancel';
+    $('#modalOk').textContent = okText;
+    $('#modalOk').className = `btn ${danger ? 'danger' : 'primary'}`;
+    $('#modalOverlay').classList.remove('hidden');
+    const input = $('#modalPasswordInput');
+    setTimeout(() => input?.focus(), 60);
+    return new Promise(resolve => {
+      modalResolver = result => {
+        const value = input?.value || '';
+        detailsEl.innerHTML = '';
+        resolve(result ? value : null);
+      };
+    });
+  }
+
+  async function resetAllData() {
+    const authHash = localStorage.getItem(AUTH_KEY);
+    if (!authHash) {
+      return modal({ title:'Password required', message:'Create a login password first before using reset data.' });
+    }
+    if (!navigator.onLine) {
+      return modal({ title:'Internet required', message:'Connect to the internet before resetting all data so the online database can be cleared safely.' });
+    }
+    const confirm = await modal({
+      title:'Reset all POS data?',
+      message:'This will clear products, sales, expenses, cart, reports, and design settings from this device and the online database.',
+      details:'This cannot be undone. Export an Excel report first if records are still needed.',
+      confirm:true,
+      okText:'Continue',
+      cancelText:'Cancel',
+      danger:true
+    });
+    if (!confirm) return;
+    const password = await passwordModal({ title:'Confirm reset', message:'Enter the current password to authorize the reset.', okText:'Reset Data', danger:true });
+    if (password === null) return;
+    const enteredHash = await hashText(password);
+    if (enteredHash !== authHash) {
+      return modal({ title:'Reset blocked', message:'The password entered is incorrect. Data was not changed.', danger:true });
+    }
+    const backupData = JSON.parse(JSON.stringify(data));
+    const backupLocal = localStorage.getItem(DB_KEY);
+    suppressCloudSync = true;
+    data = defaultData();
+    data.settings.sync = getSyncSettings();
+    localStorage.setItem(AUTH_KEY, authHash);
+    suppressCloudSync = false;
+    try {
+      await pushCloudData(false);
+      data.cart = [];
+      localStorage.setItem(DB_KEY, JSON.stringify(data));
+      renderAll();
+      setView('dashboard');
+      modal({ title:'Data reset completed', message:'Local POS records and online database records have been cleared successfully.' });
+    } catch (err) {
+      suppressCloudSync = true;
+      data = backupData;
+      if (backupLocal) localStorage.setItem(DB_KEY, backupLocal);
+      suppressCloudSync = false;
+      renderAll();
+      modal({ title:'Reset not completed', message:'The online database could not be cleared. No POS data was removed. Please check the Supabase setup and try again.', details:err.message, danger:true });
+    }
+  }
+
   function applySettings() {
     const s = { ...defaultData().settings, ...(data.settings || {}) };
     data.settings = s;
@@ -182,7 +415,7 @@
     toggle.innerHTML = `<span data-icon="${s.theme === 'dark' ? 'sun' : 'moon'}"></span><span>${s.theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>`; setIcons(toggle);
   }
 
-  function showApp() { $('#lockScreen').classList.add('hidden'); $('#app').classList.remove('hidden'); renderAll(); }
+  function showApp() { $('#lockScreen').classList.add('hidden'); $('#app').classList.remove('hidden'); renderAll(); startAutoDatabaseSync(); if (navigator.onLine) syncNow(false).catch(() => {}); }
   function lockApp() { $('#app').classList.add('hidden'); $('#lockScreen').classList.remove('hidden'); $('#passwordInput').value=''; $('#setupConfirmPassword').value=''; clearLoginError(); configureLockScreen(); }
   function setView(view) { $$('.view').forEach(v => v.classList.remove('active-view')); $(`#${view}`).classList.add('active-view'); $$('.nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view)); $('#pageTitle').textContent = view === 'pos' ? 'Point of Sale' : view.charAt(0).toUpperCase() + view.slice(1); $('#sidebar').classList.remove('open'); renderAll(); }
 
@@ -232,7 +465,7 @@
   function reportRangeRows() { const from=$('#reportFrom')?.value; const to=$('#reportTo')?.value; return data.sales.filter(s=>(!from||s.date>=from)&&(!to||s.date<=to)); }
   function reportRangeExpenses() { const from=$('#reportFrom')?.value; const to=$('#reportTo')?.value; return data.expenses.filter(e=>(!from||e.date>=from)&&(!to||e.date<=to)); }
 
-  function renderAll() { applySettings(); $('#todayText').textContent = new Date().toLocaleDateString('en-PH', { weekday:'long', year:'numeric', month:'long', day:'numeric' }); renderForms(); renderDashboard(); renderProducts(); renderPOS(); renderSales(); renderExpenses(); renderReports(); renderInventoryNotification(); setIcons(); saveData(); }
+  function renderAll() { applySettings(); $('#todayText').textContent = new Date().toLocaleDateString('en-PH', { weekday:'long', year:'numeric', month:'long', day:'numeric' }); renderForms(); renderDashboard(); renderProducts(); renderPOS(); renderSales(); renderExpenses(); renderReports(); renderInventoryNotification(); renderSyncSettings(); setIcons(); saveData(); }
 
   function renderForms() {
     if (!$('#productForm').children.length) {
@@ -711,7 +944,7 @@
         localStorage.setItem(AUTH_KEY, await hashText(password));
         $('#passwordInput').value=''; $('#setupConfirmPassword').value='';
         showApp();
-        modal({title:'Workspace secured',message:'Your password has been created successfully.'});
+        modal({title:'POS secured',message:'Your password has been created successfully.'});
         return;
       }
       const hash=await hashText(password);
@@ -729,6 +962,8 @@
     ['productsSearch','posSearch','salesSearch','expensesSearch','reportFrom','reportTo'].forEach(id=>{ const n=$(`#${id}`); if(n) n.addEventListener('input',renderAll); }); $('#resetReportFilter').addEventListener('click',()=>{ $('#reportFrom').value=''; $('#reportTo').value=''; renderAll(); });
     $('#reportExcelBtn').addEventListener('click',exportExcel);
     $('#passwordForm').addEventListener('submit', async e => { e.preventDefault(); const newPassword=$('#newPassword').value; const confirmPassword=$('#confirmPassword').value; if(newPassword !== confirmPassword) return modal({title:'Password not updated',message:'New password and confirm password must match.'}); localStorage.setItem(AUTH_KEY, await hashText(newPassword)); e.target.reset(); modal({title:'Password updated',message:'The POS password has been changed successfully.'}); });
+    window.addEventListener('online', () => { renderSyncSettings('Online'); scheduleCloudSync(); syncNow(false).catch(() => {}); });
+    window.addEventListener('offline', () => renderSyncSettings('Offline'));
     $('#logoInput').addEventListener('change', async e => {
       try {
         const src = await imageToDataUrl(e.target.files[0], { maxInputMb: 12, maxSize: 1000, quality: 0.85 });
@@ -739,9 +974,10 @@
     $$('.preset-dot').forEach(btn => btn.addEventListener('click', () => { const color = btn.dataset.color; $('#accentInput').value = color; data.settings.accent = color; renderAll(); }));
     $('#designForm').addEventListener('submit', e => { e.preventDefault(); applyDesignForm(); renderAll(); modal({title:'Design updated',message:'Branding and layout controls have been applied.'}); });
     $('#previewDesignBtn')?.addEventListener('click', () => { applyDesignForm(); renderAll(); modal({title:'Preview applied',message:'The current design controls are now visible on this device.'}); });
-    $('#resetDesignBtn')?.addEventListener('click', async () => { const ok = await modal({title:'Reset design?',message:'This restores the default appearance only. Products, sales, expenses, and password will remain unchanged.',confirm:true,okText:'Reset Design',cancelText:'Cancel'}); if(!ok) return; const current = data.settings || {}; data.settings = { ...defaultData().settings, theme: current.theme || 'light' }; $('#logoInput').value=''; renderAll(); modal({title:'Design reset',message:'The default workspace appearance has been restored.'}); });
+    $('#resetDesignBtn')?.addEventListener('click', async () => { const ok = await modal({title:'Reset design?',message:'This restores the default appearance only. Products, sales, expenses, and password will remain unchanged.',confirm:true,okText:'Reset Design',cancelText:'Cancel'}); if(!ok) return; const current = data.settings || {}; data.settings = { ...defaultData().settings, theme: current.theme || 'light' }; $('#logoInput').value=''; renderAll(); modal({title:'Design reset',message:'The default POS appearance has been restored.'}); });
+    $('#resetAllDataBtn')?.addEventListener('click', resetAllData);
   }
 
-  async function init() { setIcons(); applySettings(); configureLockScreen(); renderForms(); bindEvents(); applySettings(); if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(()=>{}); }
+  async function init() { setIcons(); applySettings(); await initialCloudPull(); configureLockScreen(); renderForms(); bindEvents(); applySettings(); if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(()=>{}); }
   init();
 })();

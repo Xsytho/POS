@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="BABY DAHLU" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests">
+  <meta name="description" content="Professional offline-first point of sale for products, sales, expenses, inventory, and reports." />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests">
   <meta name="theme-color" content="#ffffff" />
   <title>Point Of Sale</title>
   <link rel="manifest" href="manifest.webmanifest" />
@@ -21,7 +21,7 @@
         <div class="login-brand-card">
           <div class="brand-mark large">POS</div>
           <div>
-            <span class="eyebrow">BABY DAHLU</span>
+            <span class="eyebrow">Secure Access</span>
             <strong id="loginBrandName">Point Of Sale</strong>
           </div>
         </div>
@@ -58,7 +58,7 @@
           </div>
         </div>
 
-        <button type="submit" id="loginSubmitBtn" class="btn primary full">Unlock Workspace</button>
+        <button type="submit" id="loginSubmitBtn" class="btn primary full">Unlock POS</button>
         <div id="loginHelp" class="login-help"></div>
         <div id="loginError" class="form-message" role="alert"></div>
       </form>
@@ -177,7 +177,7 @@
         <div class="settings-header panel">
           <div>
             <span class="eyebrow">Owner Controls</span>
-            <h3>Workspace Appearance</h3>
+            <h3>Appearance Controls</h3>
             
           </div>
           <button id="resetDesignBtn" type="button" class="btn soft">Reset Design</button>
@@ -195,6 +195,21 @@
               <button class="btn primary">Update Password</button>
             </form>
           </article>
+
+          <article class="panel settings-card danger-zone-card">
+            <div class="settings-card-head">
+              <span class="settings-icon danger" data-icon="reset"></span>
+              <div><h3>Reset Data</h3></div>
+            </div>
+            <div class="danger-zone-content">
+              <div class="danger-zone-stat">
+                <strong>Protected action</strong>
+                <span>Requires the current password before clearing local and online records.</span>
+              </div>
+              <button id="resetAllDataBtn" type="button" class="btn danger">Reset All Data</button>
+            </div>
+          </article>
+
 
           <article class="panel settings-card brand-card-settings">
             <div class="settings-card-head">
