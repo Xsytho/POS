@@ -35,12 +35,14 @@
     expense:'<svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h10"></path></svg>',
     alert:'<svg viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>',
     'x-circle':'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M15 9l-6 6"></path><path d="M9 9l6 6"></path></svg>',
-    info:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>'
+    info:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>',
+    'chevron-left':'<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"></path></svg>',
+    'chevron-right':'<svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"></path></svg>'
   };
 
   const defaultData = () => ({
     products: [], sales: [], expenses: [], cart: [],
-    settings: { businessName:'Point Of Sale', accent:'#1d4ed8', theme:'light', logo:'', headerStyle:'soft', surfaceStyle:'elevated', cardSize:'comfortable', productImageSize:'standard', navStyle:'full', buttonStyle:'rounded', fontStyle:'system', dashboardStyle:'executive', productCardStyle:'standard', tableStyle:'standard', loginStyle:'split', backgroundStyle:'plain' }
+    settings: { businessName:'Point Of Sale', accent:'#1d4ed8', theme:'light', logo:'', headerStyle:'soft', surfaceStyle:'elevated', cardSize:'comfortable', productImageSize:'standard', navStyle:'full', buttonStyle:'rounded', fontStyle:'system', dashboardStyle:'executive', productCardStyle:'standard', tableStyle:'standard', loginStyle:'split', backgroundStyle:'plain', sidebarCollapsed:false }
   });
   let data = loadData();
 
@@ -98,6 +100,17 @@
   }
 
   function setIcons(root = document) { root.querySelectorAll('[data-icon]').forEach(el => { const key = el.dataset.icon; if (icons[key]) el.innerHTML = icons[key]; }); }
+  function applySidebarState() {
+    const collapsed = Boolean(data.settings && data.settings.sidebarCollapsed);
+    document.documentElement.classList.toggle('sidebar-collapsed', collapsed);
+    const btn = $('#sidebarCollapseBtn');
+    if (btn) {
+      btn.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
+      btn.setAttribute('title', collapsed ? 'Expand navigation' : 'Collapse navigation');
+      btn.innerHTML = `<span data-icon="${collapsed ? 'chevron-right' : 'chevron-left'}"></span>`;
+      setIcons(btn);
+    }
+  }
   function el(tag, attrs = {}, children = []) { const node = document.createElement(tag); Object.entries(attrs).forEach(([k,v]) => { if (k === 'class') node.className = v; else if (k === 'text') node.textContent = v; else if (k.startsWith('data-')) node.setAttribute(k, v); else if (k === 'html') node.innerHTML = v; else if (v !== undefined && v !== null) node.setAttribute(k, v); }); (Array.isArray(children) ? children : [children]).forEach(c => { if (c === null || c === undefined) return; node.append(c.nodeType ? c : document.createTextNode(String(c))); }); return node; }
   function field(label, input) { return el('div', {}, [el('label', { for: input.id, text: label }), input]); }
   function input(id, type, attrs = {}) { return el('input', { id, type, ...attrs }); }
@@ -124,6 +137,7 @@
     root.dataset.cardSize = s.cardSize || 'comfortable';
     root.dataset.productImage = s.productImageSize || 'standard';
     root.dataset.navStyle = s.navStyle || 'full';
+    applySidebarState();
     root.dataset.buttonStyle = s.buttonStyle || 'rounded';
     root.dataset.fontStyle = s.fontStyle || 'system';
     root.dataset.dashboardStyle = s.dashboardStyle || 'executive';
@@ -704,7 +718,7 @@
       if(hash === localStorage.getItem(AUTH_KEY)) showApp();
       else setLoginError('Invalid password. Please check your password and try again.');
     });
-    $$('.nav button').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view))); $('#menuBtn').addEventListener('click',()=>$('#sidebar').classList.toggle('open')); $('#lockBtn').addEventListener('click',lockApp); $('#stockNotifyBtn').addEventListener('click',showInventoryNotifications);
+    $$('.nav button').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view))); $('#menuBtn').addEventListener('click',()=>$('#sidebar').classList.toggle('open')); $('#sidebarCollapseBtn')?.addEventListener('click',()=>{ data.settings.sidebarCollapsed = !data.settings.sidebarCollapsed; saveData(); applySidebarState(); }); $('#lockBtn').addEventListener('click',lockApp); $('#stockNotifyBtn').addEventListener('click',showInventoryNotifications);
     document.addEventListener('click', e => { const dd=$('#inventoryDropdown'); if(dd && !dd.classList.contains('hidden') && !e.target.closest('#stockNotifyBtn') && !e.target.closest('#inventoryDropdown')) closeInventoryDropdown(); });
     document.addEventListener('keydown', e => { if(e.key === 'Escape') closeInventoryDropdown(); });
     $('#themeToggle').addEventListener('click',()=>{ data.settings.theme = data.settings.theme === 'dark' ? 'light' : 'dark'; renderAll(); }); $('#modalOk').addEventListener('click',()=>closeModal(true)); $('#modalCancel').addEventListener('click',()=>closeModal(false)); $('#modalOverlay').addEventListener('click',e=>{ if(e.target.id==='modalOverlay') closeModal(false); });

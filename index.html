@@ -69,17 +69,18 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
         <div class="brand-mark">POS</div>
-        <div>
+        <div class="brand-copy">
           <strong id="brandName">Point Of Sale</strong>
         </div>
+        <button id="sidebarCollapseBtn" class="sidebar-collapse" type="button" aria-label="Collapse navigation" title="Collapse navigation"><span data-icon="chevron-left"></span></button>
       </div>
       <nav class="nav" aria-label="Main navigation">
-        <button data-view="dashboard" class="active" type="button"><span class="nav-icon" data-icon="dashboard"></span><span>Dashboard</span></button>
-        <button data-view="pos" type="button"><span class="nav-icon" data-icon="terminal"></span><span>Point of Sale</span></button>
-        <button data-view="products" type="button"><span class="nav-icon" data-icon="box"></span><span>Products</span></button>
-        <button data-view="expenses" type="button"><span class="nav-icon" data-icon="receipt"></span><span>Expenses</span></button>
-        <button data-view="reports" type="button"><span class="nav-icon" data-icon="chart"></span><span>Reports</span></button>
-        <button data-view="settings" type="button"><span class="nav-icon" data-icon="settings"></span><span>Settings</span></button>
+        <button data-view="dashboard" data-label="Dashboard" class="active" type="button"><span class="nav-icon" data-icon="dashboard"></span><span class="nav-text">Dashboard</span></button>
+        <button data-view="pos" data-label="Point of Sale" type="button"><span class="nav-icon" data-icon="terminal"></span><span class="nav-text">Point of Sale</span></button>
+        <button data-view="products" data-label="Products" type="button"><span class="nav-icon" data-icon="box"></span><span class="nav-text">Products</span></button>
+        <button data-view="expenses" data-label="Expenses" type="button"><span class="nav-icon" data-icon="receipt"></span><span class="nav-text">Expenses</span></button>
+        <button data-view="reports" data-label="Reports" type="button"><span class="nav-icon" data-icon="chart"></span><span class="nav-text">Reports</span></button>
+        <button data-view="settings" data-label="Settings" type="button"><span class="nav-icon" data-icon="settings"></span><span class="nav-text">Settings</span></button>
       </nav>
     </aside>
 
