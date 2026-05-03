@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Professional offline-first point of sale for products, sales, expenses, inventory, and reports." />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests">
+  <meta name="theme-color" content="#ffffff" />
+  <title>Point Of Sale</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <noscript>This point of sale requires JavaScript.</noscript>
+
+  <section id="lockScreen" class="lock-screen">
+    <div class="login-shell">
+      <div class="login-visual" aria-hidden="true">
+        <div class="login-orb one"></div>
+        <div class="login-orb two"></div>
+        <div class="login-brand-card">
+          <div class="brand-mark large">POS</div>
+          <div>
+            <span class="eyebrow">Secure Workspace</span>
+            <strong id="loginBrandName">Point Of Sale</strong>
+          </div>
+        </div>
+        <div class="login-stat-card sales">
+          <span>Daily Sales</span>
+          <strong>Ready</strong>
+        </div>
+        <div class="login-stat-card stock">
+          <span>Inventory</span>
+          <strong>Tracked</strong>
+        </div>
+      </div>
+
+      <form id="loginForm" class="login-card" autocomplete="off">
+        <div class="login-copy">
+          <span class="eyebrow" id="loginModeLabel">Account Access</span>
+          <h1 id="loginTitle">Point Of Sale</h1>
+          <p id="loginSubtitle">Enter your password to continue.</p>
+        </div>
+
+        <div class="login-field">
+          <label for="passwordInput" id="passwordLabel">Password</label>
+          <div class="password-shell">
+            <span data-icon="lock"></span>
+            <input id="passwordInput" type="password" minlength="8" maxlength="64" required placeholder="Enter password" />
+          </div>
+        </div>
+
+        <div class="login-field hidden" id="confirmPasswordGroup">
+          <label for="setupConfirmPassword">Confirm password</label>
+          <div class="password-shell">
+            <span data-icon="lock"></span>
+            <input id="setupConfirmPassword" type="password" minlength="8" maxlength="64" placeholder="Re-enter password" />
+          </div>
+        </div>
+
+        <button type="submit" id="loginSubmitBtn" class="btn primary full">Unlock Workspace</button>
+        <p id="loginHelp" class="login-help">Use the password created for this device.</p>
+        <p id="loginError" class="form-message" role="alert"></p>
+      </form>
+    </div>
+  </section>
+
+  <main id="app" class="app hidden">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark">POS</div>
+        <div>
+          <strong id="brandName">Point Of Sale</strong>
+        </div>
+      </div>
+      <nav class="nav" aria-label="Main navigation">
+        <button data-view="dashboard" class="active" type="button"><span class="nav-icon" data-icon="dashboard"></span><span>Dashboard</span></button>
+        <button data-view="pos" type="button"><span class="nav-icon" data-icon="terminal"></span><span>Point of Sale</span></button>
+        <button data-view="products" type="button"><span class="nav-icon" data-icon="box"></span><span>Products</span></button>
+        <button data-view="expenses" type="button"><span class="nav-icon" data-icon="receipt"></span><span>Expenses</span></button>
+        <button data-view="reports" type="button"><span class="nav-icon" data-icon="chart"></span><span>Reports</span></button>
+        <button data-view="settings" type="button"><span class="nav-icon" data-icon="settings"></span><span>Settings</span></button>
+      </nav>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <button id="menuBtn" class="icon-btn" type="button" aria-label="Menu"><span data-icon="menu"></span></button>
+        <div class="title-block"><h2 id="pageTitle">Dashboard</h2><p id="todayText"></p></div>
+        <div class="top-actions">
+          <button id="themeToggle" class="btn soft" type="button"><span data-icon="moon"></span><span>Dark mode</span></button>
+          <button id="stockNotifyBtn" class="icon-btn notify-btn" type="button" aria-label="Inventory notifications">
+            <span data-icon="bell"></span>
+            <span id="stockBadge" class="notify-badge hidden">0</span>
+          </button>
+          <button id="lockBtn" class="icon-btn" type="button" aria-label="Lock"><span data-icon="lock"></span></button>
+        </div>
+      </header>
+
+      <section id="dashboard" class="view active-view">
+        <div class="hero net-hero">
+          <div class="net-card-main">
+            <span class="eyebrow">Net Position</span>
+            <strong id="heroNet">₱0.00</strong>
+            <small>Calculated from today's sales and expenses.</small>
+          </div>
+          <div class="net-breakdown">
+            <div><span>Sales</span><strong id="heroSalesBreakdown">₱0.00</strong></div>
+            <div><span>Expenses</span><strong id="heroExpensesBreakdown">₱0.00</strong></div>
+          </div>
+        </div>
+        <div class="metric-grid">
+          <article class="metric"><span data-icon="sales"></span><small>Sales Today</small><strong id="todaySales">₱0.00</strong></article>
+          <article class="metric"><span data-icon="expense"></span><small>Expenses Today</small><strong id="todayExpenses">₱0.00</strong></article>
+          <article class="metric"><span data-icon="box"></span><small>Products</small><strong id="productCount">0</strong></article>
+          <article class="metric warning"><span data-icon="alert"></span><small>Low Stock</small><strong id="lowStockCount">0</strong></article>
+          <article class="metric danger"><span data-icon="x-circle"></span><small>Out of Stock</small><strong id="outStockCount">0</strong></article>
+        </div>
+        <div class="grid two">
+          <article class="panel"><div class="panel-head"><div><h3>Inventory Watchlist</h3><p>Products that need restocking.</p></div></div><div id="stockAlerts" class="stock-alerts"></div></article>
+          <article class="panel"><div class="panel-head"><div><h3>Recent Transactions</h3><p>Latest completed POS sales.</p></div></div><div id="recentSales" class="activity-list"></div></article>
+        </div>
+      </section>
+
+      <section id="pos" class="view">
+        <div class="pos-layout">
+          <article class="panel product-browser">
+            <div class="table-head">
+              <div><h3>Point of Sale</h3><p>Select products to add them to the cart.</p></div>
+              <input id="posSearch" placeholder="Search product or category" />
+            </div>
+            <div id="posProducts" class="pos-products"></div>
+          </article>
+          <aside class="panel cart-panel">
+            <div class="panel-head"><div><h3>Current Order</h3><p id="cartCountText">No items selected.</p></div><button id="clearCartBtn" class="btn soft small" type="button">Clear</button></div>
+            <div id="cartItems" class="cart-items"></div>
+            <div class="cart-summary">
+              <div><span>Total quantity</span><strong id="cartQty">0</strong></div>
+              <div><span>Total items</span><strong id="cartLines">0</strong></div>
+              <div class="grand"><span>Total amount</span><strong id="cartTotal">₱0.00</strong></div>
+            </div>
+            <button id="checkoutBtn" class="btn primary full checkout" type="button">Complete Sale</button>
+          </aside>
+        </div>
+      </section>
+
+      <section id="products" class="view">
+        <div class="grid product-layout">
+          <article class="panel"><div class="panel-head"><div><h3>Add Product</h3><p>Include product photo, price, and stock.</p></div></div><form id="productForm" class="form"></form></article>
+          <article class="panel"><div class="table-head"><div><h3>Product Catalog</h3><p>Responsive cards with stock status.</p></div><input id="productsSearch" placeholder="Search product or category" /></div><div id="productCards" class="product-cards"></div></article>
+        </div>
+      </section>
+
+      <section id="expenses" class="view">
+        <div class="grid two">
+          <article class="panel"><div class="panel-head"><div><h3>Add Daily Expense</h3><p>Track operational costs.</p></div></div><form id="expenseForm" class="form"></form></article>
+          <article class="panel"><div class="table-head"><div><h3>Expense Records</h3><p>All expenses saved offline.</p></div><input id="expensesSearch" placeholder="Search expenses" /></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Price</th><th></th></tr></thead><tbody id="expensesTable"></tbody></table></div></article>
+        </div>
+      </section>
+
+      <section id="reports" class="view">
+        <article class="panel report-toolbar">
+          <div><h3>Daily Reports</h3></div>
+          <div class="filters calendar-filters"><label>From<input id="reportFrom" type="date" /></label><label>To<input id="reportTo" type="date" /></label><button id="resetReportFilter" class="btn soft" type="button">Reset</button><button id="reportExcelBtn" type="button" class="btn primary"><span data-icon="download"></span><span>Excel Report</span></button></div>
+        </article>
+        <div class="metric-grid compact report-summary-grid">
+          <article class="metric"><small>Sales Total</small><strong id="reportSalesTotal">₱0.00</strong></article>
+          <article class="metric"><small>Expenses Total</small><strong id="reportExpensesTotal">₱0.00</strong></article>
+          <article class="metric"><small>Net</small><strong id="reportNetTotal">₱0.00</strong></article>
+        </div>
+        <article class="panel"><div class="table-head"><div><h3>Daily Report Table</h3></div></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Daily Sales</th><th>Daily Expenses</th><th>Net</th><th>Running Sales</th><th>Running Expenses</th></tr></thead><tbody id="reportTable"></tbody></table></div></article>
+        <article class="panel"><div class="table-head"><div><h3>Sales Records</h3></div><input id="salesSearch" placeholder="Search sales" /></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Item Description</th><th>Category</th><th>Price</th><th>Qty</th><th>Total Amount</th><th></th></tr></thead><tbody id="salesTable"></tbody></table></div></article>
+      </section>
+
+      <section id="settings" class="view">
+        <div class="settings-header panel">
+          <div>
+            <span class="eyebrow">Owner Controls</span>
+            <h3>Workspace Appearance</h3>
+            <p>Manage branding, layout, and screen style from one place.</p>
+          </div>
+          <button id="resetDesignBtn" type="button" class="btn soft">Reset Design</button>
+        </div>
+
+        <div class="settings-layout">
+          <article class="panel settings-card security-card">
+            <div class="settings-card-head">
+              <span class="settings-icon" data-icon="lock"></span>
+              <div><h3>Security</h3><p>Update access password for this device.</p></div>
+            </div>
+            <form id="passwordForm" class="form">
+              <div><label for="newPassword">New password</label><input id="newPassword" type="password" minlength="8" maxlength="64" required placeholder="Minimum 8 characters"></div>
+              <div><label for="confirmPassword">Confirm password</label><input id="confirmPassword" type="password" minlength="8" maxlength="64" required placeholder="Re-enter new password"></div>
+              <button class="btn primary">Update Password</button>
+            </form>
+          </article>
+
+          <article class="panel settings-card brand-card-settings">
+            <div class="settings-card-head">
+              <span class="settings-icon" data-icon="settings"></span>
+              <div><h3>Branding</h3><p>Control the business name, logo, and primary color.</p></div>
+            </div>
+            <form id="designForm" class="settings-form">
+              <div class="logo-control settings-span-2">
+                <label for="logoInput">POS Logo</label>
+                <div class="logo-preview-box"><img id="logoPreview" class="hidden" alt="POS logo preview"><span>Logo preview</span></div>
+                <div class="inline-actions"><input id="logoInput" type="file" accept="image/*"><button id="removeLogoBtn" type="button" class="btn soft small">Remove Logo</button></div>
+              </div>
+              <div><label for="businessNameInput">Business name</label><input id="businessNameInput" maxlength="40" placeholder="Point Of Sale"></div>
+              <div><label for="accentInput">Accent color</label><input id="accentInput" type="color" value="#1d4ed8"></div>
+
+              <div><label for="headerStyleInput">Header style</label><select id="headerStyleInput"><option value="soft">Soft</option><option value="solid">Solid</option><option value="minimal">Minimal</option></select></div>
+              <div><label for="surfaceStyleInput">Card style</label><select id="surfaceStyleInput"><option value="elevated">Elevated</option><option value="flat">Flat</option><option value="glass">Glass</option></select></div>
+              <div><label for="cardSizeInput">Screen spacing</label><select id="cardSizeInput"><option value="comfortable">Comfortable</option><option value="compact">Compact</option><option value="spacious">Spacious</option></select></div>
+              <div><label for="productImageSizeInput">Product image size</label><select id="productImageSizeInput"><option value="standard">Standard</option><option value="compact">Compact</option><option value="large">Large</option></select></div>
+              <div><label for="navStyleInput">Navigation style</label><select id="navStyleInput"><option value="full">Full labels</option><option value="compact">Icon focus</option></select></div>
+              <div><label for="buttonStyleInput">Button style</label><select id="buttonStyleInput"><option value="rounded">Rounded</option><option value="soft">Pill</option><option value="sharp">Clean edge</option></select></div>
+
+              <div><label for="fontStyleInput">Font style</label><select id="fontStyleInput"><option value="system">System professional</option><option value="rounded">Rounded modern</option><option value="serif">Editorial</option></select></div>
+              <div><label for="dashboardStyleInput">Dashboard style</label><select id="dashboardStyleInput"><option value="executive">Executive</option><option value="compact">Compact</option><option value="focus">Net focus</option></select></div>
+              <div><label for="productCardStyleInput">Product card style</label><select id="productCardStyleInput"><option value="standard">Balanced</option><option value="image">Image focus</option><option value="compact">Compact selling</option></select></div>
+              <div><label for="tableStyleInput">Table style</label><select id="tableStyleInput"><option value="standard">Standard</option><option value="dense">Dense records</option><option value="lined">Strong lines</option></select></div>
+              <div><label for="loginStyleInput">Login style</label><select id="loginStyleInput"><option value="split">Split panel</option><option value="centered">Centered card</option><option value="minimal">Minimal</option></select></div>
+              <div><label for="backgroundStyleInput">Background style</label><select id="backgroundStyleInput"><option value="plain">Clean white</option><option value="soft">Soft gradient</option><option value="premium">Premium glow</option></select></div>
+
+              <div class="preset-panel settings-span-2">
+                <div>
+                  <strong>Color presets</strong>
+                  <small>Quickly change the main brand color.</small>
+                </div>
+                <div class="preset-grid" aria-label="Accent color presets">
+                  <button type="button" class="preset-dot" data-color="#1d4ed8" style="--preset:#1d4ed8" aria-label="Blue"></button>
+                  <button type="button" class="preset-dot" data-color="#059669" style="--preset:#059669" aria-label="Green"></button>
+                  <button type="button" class="preset-dot" data-color="#7c3aed" style="--preset:#7c3aed" aria-label="Violet"></button>
+                  <button type="button" class="preset-dot" data-color="#dc2626" style="--preset:#dc2626" aria-label="Red"></button>
+                  <button type="button" class="preset-dot" data-color="#0f766e" style="--preset:#0f766e" aria-label="Teal"></button>
+                  <button type="button" class="preset-dot" data-color="#ea580c" style="--preset:#ea580c" aria-label="Orange"></button>
+                </div>
+              </div>
+
+              <div class="settings-actions settings-span-2">
+                <button class="btn primary" type="submit">Apply Design</button>
+                <button id="previewDesignBtn" class="btn soft" type="button">Preview Current Settings</button>
+              </div>
+            </form>
+          </article>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div id="modalOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card">
+      <div class="modal-icon" id="modalIcon"><span data-icon="info"></span></div>
+      <h3 id="modalTitle">Notice</h3>
+      <p id="modalMessage">Message</p>
+      <div id="modalDetails" class="modal-details hidden"></div>
+      <div class="modal-actions"><button id="modalCancel" type="button" class="btn soft">Cancel</button><button id="modalOk" type="button" class="btn primary">Continue</button></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
